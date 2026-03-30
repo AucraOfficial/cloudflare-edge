@@ -8,7 +8,3 @@ AUCRA_SSP_URL = "https://api.aucra.com"
 
 # Set your edge key as a secret (never commit to source control):
 # wrangler secret put AUCRA_EDGE_KEY
-
-[[kv_namespaces]]
-binding = "PAGE_RULES"
-id = "your-page-rules-namespace-id"

@@ -14,7 +14,6 @@ interface Env {
   AUCRA_SDK_KEY?: string;    // optional, falls back to AUCRA_EDGE_KEY
   AUCRA_PUBLISHER_ID: string;
   AUCRA_SSP_URL: string;     // https://api.aucra.com
-  PAGE_RULES: KVNamespace;
 }
 
 interface AuctionResult {
@@ -46,9 +45,13 @@ export function createAucraHandler(
 
     let parsedRules: PageRule[] = [];
     try {
-      const raw = await env.PAGE_RULES.get(env.AUCRA_PUBLISHER_ID);
-      if (raw) {
-        parsedRules = parsePageRules(raw);
+      const res = await fetch(
+        `${env.AUCRA_SSP_URL}/v1/publisher/page-rules?delivery=edge`,
+        { headers: { "X-API-Key": env.AUCRA_SDK_KEY ?? env.AUCRA_EDGE_KEY } }
+      );
+      if (res.ok) {
+        const json = (await res.json()) as { rules?: unknown };
+        parsedRules = parsePageRules(json.rules);
       }
     } catch {
       parsedRules = [];
@@ -197,11 +200,10 @@ function escapeHtml(str: string): string {
     .replace(/"/g, "&quot;");
 }
 
-function parsePageRules(raw: string): PageRule[] {
+function parsePageRules(raw: unknown): PageRule[] {
   try {
-    const json = JSON.parse(raw);
-    if (!Array.isArray(json)) return [];
-    return json
+    if (!Array.isArray(raw)) return [];
+    return raw
       .filter(
         (item): item is { pattern: unknown; mode: unknown } =>
           typeof item === "object" && item !== null

@@ -1,17 +1,9 @@
 name = "aucra-edge"
-main = "worker.ts"
+main = "src/index.ts"
 compatibility_date = "2024-01-01"
 
 [vars]
 AUCRA_PUBLISHER_ID = "your-publisher-id"
 AUCRA_SSP_URL = "https://api.aucra.com"
 
-# Set AUCRA_EDGE_KEY as a secret (never commit to source control):
 # wrangler secret put AUCRA_EDGE_KEY
-#
-# Optional analytics key (falls back to AUCRA_EDGE_KEY if unset):
-# wrangler secret put AUCRA_SDK_KEY
-
-[[kv_namespaces]]
-binding = "PAGE_RULES"
-id = "your-page-rules-namespace-id"
