@@ -6,4 +6,4 @@ compatibility_date = "2024-01-01"
 AUCRA_PUBLISHER_ID = "your-publisher-id"
 AUCRA_SSP_URL = "https://api.aucra.com"
 
-# wrangler secret put AUCRA_EDGE_KEY
+# wrangler secret put AUCRA_API_KEY

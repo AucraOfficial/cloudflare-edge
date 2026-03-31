@@ -6,5 +6,5 @@ compatibility_date = "2024-01-01"
 AUCRA_PUBLISHER_ID = "your-publisher-id"
 AUCRA_SSP_URL = "https://api.aucra.com"
 
-# Set your edge key as a secret (never commit to source control):
-# wrangler secret put AUCRA_EDGE_KEY
+# Set your API key as a secret (never commit to source control):
+# wrangler secret put AUCRA_API_KEY

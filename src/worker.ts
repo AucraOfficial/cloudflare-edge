@@ -10,8 +10,7 @@ interface PageRule {
 }
 
 interface Env {
-  AUCRA_EDGE_KEY: string;    // stored as Cloudflare secret
-  AUCRA_SDK_KEY?: string;    // optional, falls back to AUCRA_EDGE_KEY
+  AUCRA_API_KEY: string;     // stored as Cloudflare secret
   AUCRA_PUBLISHER_ID: string;
   AUCRA_SSP_URL: string;     // https://api.aucra.com
 }
@@ -47,7 +46,7 @@ export function createAucraHandler(
     try {
       const res = await fetch(
         `${env.AUCRA_SSP_URL}/v1/publisher/page-rules?delivery=edge`,
-        { headers: { "X-API-Key": env.AUCRA_SDK_KEY ?? env.AUCRA_EDGE_KEY } }
+        { headers: { "X-API-Key": env.AUCRA_API_KEY } }
       );
       if (res.ok) {
         const json = (await res.json()) as { rules?: unknown };
@@ -120,7 +119,7 @@ async function fetchAd(
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-Edge-Key": env.AUCRA_EDGE_KEY,
+        "X-API-Key": env.AUCRA_API_KEY,
       },
       body: JSON.stringify({
         publisherId: env.AUCRA_PUBLISHER_ID,
@@ -153,7 +152,7 @@ async function sendEdgeEvent(
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-SDK-Key": env.AUCRA_SDK_KEY ?? env.AUCRA_EDGE_KEY,
+      "X-API-Key": env.AUCRA_API_KEY,
     },
     body: JSON.stringify({
       eventType,
