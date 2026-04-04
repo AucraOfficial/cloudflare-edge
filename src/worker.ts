@@ -23,7 +23,7 @@ interface AuctionResult {
 
 const AD_FETCH_TIMEOUT_MS = 100;
 const RULES_CACHE_TTL_MS = 60_000;
-const AD_BLOCK_SELECTOR = "</body>";
+const AD_BLOCK_SELECTOR = /<body[^>]*>/;
 const DEFAULT_MODE: PageMode = "monetise";
 
 export interface AucraHandlerOptions {
@@ -91,7 +91,10 @@ export function createAucraHandler(
       }
 
       // Run edge auction with tight timeout (fail open — never delay the page)
-      const ad = await fetchAd(request, env).catch(() => null);
+      const ad = await fetchAd(request, env).catch((err) => {
+        console.error(`[AUCRA] Edge auction failed: ${err.message}`);
+        return null;
+      });
       if (!ad) {
         ctx.waitUntil(
           sendEdgeEvent(request, env, "edge_monetise_nofill").catch(() => undefined)
@@ -102,7 +105,14 @@ export function createAucraHandler(
       ctx.waitUntil(
         sendEdgeEvent(request, env, "edge_monetise_win").catch(() => undefined)
       );
-      return injectAdIntoResponse(originResponse, ad);
+
+      const response = await injectAdIntoResponse(originResponse, ad);
+
+      // Return the response with a session cookie to test if AI agents persist it.
+      const sid = request.headers.get("cookie")?.match(/aucra_sid=([^;]+)/)?.[1] || crypto.randomUUID();
+      response.headers.append("Set-Cookie", `aucra_sid=${sid}; Path=/; HttpOnly; SameSite=Lax; Max-Age=3600`);
+
+      return response;
     },
   };
 }
@@ -114,6 +124,19 @@ async function fetchAd(
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AD_FETCH_TIMEOUT_MS);
 
+  const referer = request.headers.get("referer") || "";
+  const ua = request.headers.get("user-agent") || "";
+  const cookie = request.headers.get("cookie") || "";
+  const sid = cookie.match(/aucra_sid=([^;]+)/)?.[1] || "";
+
+  console.log(`[AUCRA] Edge Auction Request:
+    URL: ${request.url}
+    UA: ${ua}
+    Referer: ${referer}
+    SID: ${sid}
+    Cookies: ${cookie}
+  `);
+
   try {
     const res = await fetch(`${env.AUCRA_SSP_URL}/v1/edge/auction`, {
       method: "POST",
@@ -124,15 +147,25 @@ async function fetchAd(
       body: JSON.stringify({
         publisherId: env.AUCRA_PUBLISHER_ID,
         pageUrl: request.url,
-        userAgent: request.headers.get("user-agent") ?? "",
+        userAgent: ua,
+        referer: referer,
+        sessionId: sid,
       }),
       signal: controller.signal,
     });
 
-    if (res.status === 204) return null; // no fill
-    if (!res.ok) return null;
+    if (res.status === 204) {
+      console.log(`[AUCRA] Auction Result: 204 (No bid)`);
+      return null;
+    }
+    if (!res.ok) {
+      console.log(`[AUCRA] Auction Result: ${res.status} (Error)`);
+      return null;
+    }
 
-    return (await res.json()) as AuctionResult;
+    const data = (await res.json()) as AuctionResult;
+    console.log(`[AUCRA] Auction Result: 200 (Winner: ${data.adText})`);
+    return data;
   } finally {
     clearTimeout(timer);
   }
@@ -169,7 +202,7 @@ async function injectAdIntoResponse(
 ): Promise<Response> {
   const adBlock = buildAdBlock(ad);
   const text = await response.text();
-  const injected = text.replace(AD_BLOCK_SELECTOR, `${adBlock}${AD_BLOCK_SELECTOR}`);
+  const injected = text.replace(AD_BLOCK_SELECTOR, `$&${adBlock}`);
   return new Response(injected, {
     status: response.status,
     headers: response.headers,
@@ -186,8 +219,8 @@ function buildAdBlock(ad: AuctionResult): string {
   };
   const prefix = ad.label in LABEL_MAP ? LABEL_MAP[ad.label] : "Sponsored:";
   const text = escapeHtml(ad.adText);
-  const url = escapeHtml(ad.citationUrl);
-  const line = prefix ? `${prefix} ${text} ${url}` : `${text} ${url}`;
+  const url = ad.citationUrl ? ` ${escapeHtml(ad.citationUrl)}` : "";
+  const line = prefix ? `${prefix} ${text}${url}` : `${text}${url}`;
   return `<p>${line}</p>\n`;
 }
 
