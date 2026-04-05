@@ -6,9 +6,6 @@ on:
       - main
   workflow_dispatch:
 
-permissions:
-  contents: write
-
 jobs:
   build:
     runs-on: ubuntu-latest
@@ -27,14 +24,11 @@ jobs:
       - name: Build bundle
         run: npm run build
 
-      - name: Copy bundle to release asset name
-        run: cp dist/bundle.js worker-bundle
-
-      - name: Create release with bundle
-        uses: softprops/action-gh-release@v2
+      - name: Upload bundle to R2
+        uses: cloudflare/wrangler-action@v3
         with:
-          tag_name: bundle-${{ github.sha }}
-          files: worker-bundle
-          generate_release_notes: true
-        env:
-          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: |
+            npx wrangler r2 object put cloudflare-sdk/${{ github.sha }}/worker-bundle --file=dist/bundle.js
+            echo "${{ github.sha }}" | npx wrangler r2 object put cloudflare-sdk/version --file=-

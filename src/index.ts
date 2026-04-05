@@ -1,3 +1,5 @@
+import { createAucraHandler } from "./worker";
+
 export { createAucraHandler } from "./worker";
 export type { AucraHandlerOptions } from "./worker";
 export {

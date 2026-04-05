@@ -2,7 +2,7 @@ import { compositeDetector, type AgentDetector } from "./agent-detection";
 
 export type { AgentDetector };
 
-// Default export — the SSP expects K to be the handler function.
+// Default export — the IIFE returns k(), so K = the handler object, K.fetch(...) works.
 export { createAucraHandler as default };
 
 type PageMode = "observe" | "monetise";
@@ -17,6 +17,12 @@ interface Env {
   AUCRA_PUBLISHER_ID: string;
   AUCRA_SSP_URL: string;     // https://api.aucra.com
 }
+
+// Build-time constants — replaced by Go GenerateScript before upload.
+// Kept as globals so the bundled IIFE can reference them directly.
+declare const __AUCRA_PUBLISHER_ID__: string;
+declare const __AUCRA_API_KEY__: string;
+declare const __AUCRA_SSP_URL__: string;
 
 interface AuctionResult {
   adText: string;
@@ -39,7 +45,7 @@ export function createAucraHandler(
   const agentDetector = options.detector ?? compositeDetector;
   let cachedPageRules: { expiresAt: number; rules: PageRule[] } | null = null;
 
-  async function getPageRules(env: Env): Promise<PageRule[]> {
+  async function getPageRules(_env: Env): Promise<PageRule[]> {
     const now = Date.now();
     if (cachedPageRules && cachedPageRules.expiresAt > now) {
       return cachedPageRules.rules;
@@ -48,8 +54,8 @@ export function createAucraHandler(
     let parsedRules: PageRule[] = [];
     try {
       const res = await fetch(
-        `${env.AUCRA_SSP_URL}/v1/publisher/page-rules?delivery=edge`,
-        { headers: { "X-API-Key": env.AUCRA_API_KEY } }
+        `${__AUCRA_SSP_URL__}/v1/publisher/page-rules?delivery=edge`,
+        { headers: { "X-API-Key": __AUCRA_API_KEY__ } }
       );
       if (res.ok) {
         const json = (await res.json()) as { rules?: unknown };
@@ -63,8 +69,8 @@ export function createAucraHandler(
     return parsedRules;
   }
 
-  async function resolveMode(request: Request, env: Env): Promise<PageMode> {
-    const rules = await getPageRules(env);
+  async function resolveMode(request: Request, _env: Env): Promise<PageMode> {
+    const rules = await getPageRules(_env);
     const path = new URL(request.url).pathname;
     for (const rule of rules) {
       if (matchGlob(rule.pattern, path)) return rule.mode;
@@ -73,7 +79,7 @@ export function createAucraHandler(
   }
 
   return {
-    async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+    async fetch(request: Request, _env: Env, ctx: ExecutionContext): Promise<Response> {
       const ua = request.headers.get("user-agent") ?? "(none)";
 
       // Only attempt ad injection for known AI agents.
@@ -101,29 +107,29 @@ export function createAucraHandler(
         return originResponse;
       }
 
-      const mode = await resolveMode(request, env);
+      const mode = await resolveMode(request, _env);
       console.log(`[AUCRA] Page mode resolved: "${mode}"`);
       if (mode === "observe") {
-        ctx.waitUntil(
-          sendEdgeEvent(request, env, "edge_observe").catch(() => undefined)
+        void ctx?.waitUntil(
+          sendEdgeEvent(request, "edge_observe").catch(() => undefined)
         );
         return originResponse;
       }
 
       // Run edge auction with tight timeout (fail open — never delay the page)
-      const ad = await fetchAd(request, env).catch((err) => {
+      const ad = await fetchAd(request).catch((err) => {
         console.error(`[AUCRA] Edge auction failed: ${err.message}`);
         return null;
       });
       if (!ad) {
-        ctx.waitUntil(
-          sendEdgeEvent(request, env, "edge_monetise_nofill").catch(() => undefined)
+        void ctx?.waitUntil(
+          sendEdgeEvent(request, "edge_monetise_nofill").catch(() => undefined)
         );
         return originResponse;
       }
 
-      ctx.waitUntil(
-        sendEdgeEvent(request, env, "edge_monetise_win").catch(() => undefined)
+      void ctx?.waitUntil(
+        sendEdgeEvent(request, "edge_monetise_win").catch(() => undefined)
       );
 
       const response = await injectAdIntoResponse(originResponse, ad);
@@ -137,10 +143,7 @@ export function createAucraHandler(
   };
 }
 
-async function fetchAd(
-  request: Request,
-  env: Env
-): Promise<AuctionResult | null> {
+async function fetchAd(request: Request): Promise<AuctionResult | null> {
   const controller = new AbortController();
   const timer = setTimeout(() => controller.abort(), AD_FETCH_TIMEOUT_MS);
 
@@ -156,14 +159,14 @@ async function fetchAd(
   `);
 
   try {
-    const res = await fetch(`${env.AUCRA_SSP_URL}/v1/edge/auction`, {
+    const res = await fetch(`${__AUCRA_SSP_URL__}/v1/edge/auction`, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
-        "X-API-Key": env.AUCRA_API_KEY,
+        "X-API-Key": __AUCRA_API_KEY__,
       },
       body: JSON.stringify({
-        publisherId: env.AUCRA_PUBLISHER_ID,
+        publisherId: __AUCRA_PUBLISHER_ID__,
         pageUrl: request.url,
         userAgent: ua,
         referer: referer,
@@ -196,18 +199,17 @@ type EdgeEventType =
 
 async function sendEdgeEvent(
   request: Request,
-  env: Env,
   eventType: EdgeEventType
 ): Promise<void> {
-  await fetch(`${env.AUCRA_SSP_URL}/v1/events`, {
+  await fetch(`${__AUCRA_SSP_URL__}/v1/events`, {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "X-API-Key": env.AUCRA_API_KEY,
+      "X-API-Key": __AUCRA_API_KEY__,
     },
     body: JSON.stringify({
       eventType,
-      publisherId: env.AUCRA_PUBLISHER_ID,
+      publisherId: __AUCRA_PUBLISHER_ID__,
       pageUrl: request.url,
       userAgent: request.headers.get("user-agent") ?? "",
     }),
