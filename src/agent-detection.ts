@@ -61,7 +61,16 @@ const AI_UA_REGEX = new RegExp(
 
 export function uaListDetector(request: Request): boolean {
   const ua = request.headers.get("user-agent") ?? "";
-  return AI_UA_REGEX.test(ua);
+  const matched = AI_UA_REGEX.test(ua);
+  if (matched) {
+    const hit = AI_UA_PATTERNS.find((p) =>
+      ua.toLowerCase().includes(p.toLowerCase())
+    );
+    console.log(`[AUCRA] UA detector: MATCH — pattern "${hit}" matched UA: "${ua}"`);
+  } else {
+    console.log(`[AUCRA] UA detector: MISS — no known AI UA pattern in: "${ua}"`);
+  }
+  return matched;
 }
 
 // ---------------------------------------------------------------------------
@@ -97,19 +106,50 @@ type CfBotManagement = {
 export function cfBotManagementDetector(request: Request): boolean {
   const cf = (request as any).cf as { botManagement?: CfBotManagement } | undefined;
   const bm = cf?.botManagement;
-  if (!bm) return false;
+
+  if (!bm) {
+    console.log(
+      `[AUCRA] CF Bot Management: no botManagement data (zone may lack Bot Management subscription)`
+    );
+    return false;
+  }
+
+  console.log(
+    `[AUCRA] CF Bot Management: score=${bm.score ?? "(none)"} ` +
+      `verifiedBot=${bm.verifiedBot} ` +
+      `category="${bm.verifiedBotCategory ?? "(none)"}" ` +
+      `staticResource=${bm.staticResource}`
+  );
 
   // Verified AI bot — highest confidence
-  if (bm.verifiedBot && bm.verifiedBotCategory && CF_AI_CATEGORIES.has(bm.verifiedBotCategory)) {
-    return true;
+  if (bm.verifiedBot && bm.verifiedBotCategory) {
+    if (CF_AI_CATEGORIES.has(bm.verifiedBotCategory)) {
+      console.log(
+        `[AUCRA] CF Bot Management: VERIFIED AI BOT — category="${bm.verifiedBotCategory}" → DETECTED`
+      );
+      return true;
+    } else {
+      console.log(
+        `[AUCRA] CF Bot Management: verified bot but category="${bm.verifiedBotCategory}" ` +
+          `not in AI list → passing through UA check`
+      );
+      return uaListDetector(request);
+    }
   }
 
   // Low bot score (likely automated) — fall through to UA check for confirmation
   // so we don't serve ads to non-AI scrapers (price monitors, SEO crawlers, etc.)
   if ((bm.score ?? 100) < CF_BOT_SCORE_THRESHOLD) {
+    console.log(
+      `[AUCRA] CF Bot Management: score=${bm.score} < ${CF_BOT_SCORE_THRESHOLD} threshold ` +
+        `→ passing through UA check`
+    );
     return uaListDetector(request);
   }
 
+  console.log(
+    `[AUCRA] CF Bot Management: score=${bm.score ?? 100} >= threshold, not verified AI → NOT DETECTED`
+  );
   return false;
 }
 
@@ -123,8 +163,22 @@ export function cfBotManagementDetector(request: Request): boolean {
 
 export function compositeDetector(request: Request): boolean {
   const cf = (request as any).cf as { botManagement?: CfBotManagement } | undefined;
-  if (cf?.botManagement) {
-    return cfBotManagementDetector(request);
+  const bm = cf?.botManagement;
+
+  // Only use CF Bot Management if botManagement is populated.
+  // Even with Bot Management enabled, not every request has a populated botManagement field.
+  if (bm && Object.keys(bm).length > 0) {
+    console.log(`[AUCRA] compositeDetector: cf.botManagement populated — using CF Bot Management`);
+    const result = cfBotManagementDetector(request);
+    // Fall back to UA check if CF didn't detect an AI bot.
+    // This catches AI agents that CF flags as non-AI verified bots.
+    if (!result) {
+      console.log(`[AUCRA] compositeDetector: CF did not detect AI bot — falling back to UA list`);
+      return uaListDetector(request);
+    }
+    return true;
   }
+
+  console.log(`[AUCRA] compositeDetector: no cf.botManagement — falling back to UA list`);
   return uaListDetector(request);
 }

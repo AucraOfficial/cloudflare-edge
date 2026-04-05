@@ -71,18 +71,35 @@ export function createAucraHandler(
 
   return {
     async fetch(request: Request, env: Env, ctx: ExecutionContext): Promise<Response> {
+      const ua = request.headers.get("user-agent") ?? "(none)";
+
       // Only attempt ad injection for known AI agents.
-      // Human visitors skip the auction entirely — zero added latency for them.
+      // Human visitors skip the origin fetch entirely — zero added latency for them.
       const isAiAgent = agentDetector(request);
 
-      const originResponse = await fetch(request);
+      if (!isAiAgent) {
+        console.log(
+          `[AUCRA] Not an AI agent — UA="${ua}" URL="${request.url}" — passing through unchanged`
+        );
+        return fetch(request);
+      }
 
+      console.log(
+        `[AUCRA] AI agent detected — UA="${ua}" URL="${request.url}"`
+      );
+
+      const originResponse = await fetch(request);
       const contentType = originResponse.headers.get("content-type") ?? "";
-      if (!contentType.includes("text/html") || !isAiAgent) {
+
+      if (!contentType.includes("text/html")) {
+        console.log(
+          `[AUCRA] Non-HTML response (${contentType}) — skipping ad injection`
+        );
         return originResponse;
       }
 
       const mode = await resolveMode(request, env);
+      console.log(`[AUCRA] Page mode resolved: "${mode}"`);
       if (mode === "observe") {
         ctx.waitUntil(
           sendEdgeEvent(request, env, "edge_observe").catch(() => undefined)
@@ -126,15 +143,13 @@ async function fetchAd(
 
   const referer = request.headers.get("referer") || "";
   const ua = request.headers.get("user-agent") || "";
-  const cookie = request.headers.get("cookie") || "";
-  const sid = cookie.match(/aucra_sid=([^;]+)/)?.[1] || "";
+  const sid = request.headers.get("cookie")?.match(/aucra_sid=([^;]+)/)?.[1] || "";
 
   console.log(`[AUCRA] Edge Auction Request:
     URL: ${request.url}
     UA: ${ua}
     Referer: ${referer}
-    SID: ${sid}
-    Cookies: ${cookie}
+    SID: ${sid || "(new)"}
   `);
 
   try {
