@@ -12,20 +12,26 @@ export type AgentDetector = (request: Request) => boolean;
 // ---------------------------------------------------------------------------
 
 // Known AI agent user-agent substrings. Case-insensitive match.
-// Sources: Cloudflare Radar verified bots, OpenAI/Anthropic/Google disclosures.
+// Sources: Cloudflare Radar verified bots, knownagents.com, OpenAI/Anthropic/Google disclosures.
 const AI_UA_PATTERNS = [
   // OpenAI
   "GPTBot",           // OpenAI training crawler
   "ChatGPT-User",     // OpenAI inference / browsing actions
+  "ChatGPT-Agent",    // ChatGPT Agent / Operator
 
   // Anthropic
   "ClaudeBot",        // Anthropic training crawler
   "Claude-Web",       // Anthropic web access (inference)
+  "Claude-User",      // Anthropic inference / browsing
   "anthropic-ai",
 
   // Google
   "Google-Extended",  // Google AI training opt-out target
   "Googlebot-Extended",
+  "Google-CloudVertexBot", // Vertex AI crawler
+  "GoogleOther",     // Google unspecified crawler
+  "Google-NotebookLM",
+  "GoogleAgent-Mariner",
 
   // Perplexity
   "PerplexityBot",
@@ -40,9 +46,11 @@ const AI_UA_PATTERNS = [
 
   // Amazon
   "Amazonbot",
+  "AmazonBuyForMe",
 
   // Cohere
   "cohere-ai",
+  "cohere-training-data-crawler",
 
   // ByteDance
   "Bytespider",
@@ -52,6 +60,66 @@ const AI_UA_PATTERNS = [
 
   // Diffbot (structured data extraction, used by many AI pipelines)
   "Diffbot",
+
+  // CommonCrawl (AI training data)
+  "CCBot",
+
+  // Phind (AI search)
+  "PhindBot",
+
+  // DuckDuckGo
+  "DuckAssistBot",
+
+  // Kagi (search)
+  "kagi-fetcher",
+
+  // Klaviyo (marketing)
+  "KlaviyoAIBot",
+
+  // Liner (AI search)
+  "LinerBot",
+
+  // Mistral AI
+  "MistralAI-User",
+
+  // Manus (AI agent)
+  "Manus",
+
+  // NovaAct (AI agent)
+  "NovaAct",
+
+  // Cloudflare
+  "Cloudflare-AutoRAG",
+  "CloudVertexBot",
+
+  // Exa / Linkup (AI search)
+  "ExaBot",
+  "LinkupBot",
+
+  // OAI Search
+  "OAI-SearchBot",
+
+  // Firecrawl (AI web scraping)
+  "FirecrawlAgent",
+  "webzio-extended",
+
+  // Apify (web scraping platform)
+  "ApifyWebsiteContentCrawler",
+
+  // Vercel v0 / AI agents
+  "VercelAIOSBot",
+
+  // Brave AI
+  "Bravebot",
+
+  // Devin (AI coding agent)
+  "Devin",
+
+  // Telegram / messaging bots
+  "TelegramBot",
+
+  // Slack / Teams bots
+  "Slackbot",
 ];
 
 const AI_UA_REGEX = new RegExp(
