@@ -29,6 +29,11 @@ jobs:
         with:
           apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
           accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: |
-            r2 object put cloudflare-sdk/${{ github.sha }}/worker-bundle --file=dist/bundle.js
-            echo "${{ github.sha }}" | r2 object put cloudflare-sdk/version --file=-
+          command: r2 object put cloudflare-sdk/${{ github.sha }}/worker-bundle --file=dist/bundle.js
+
+      - name: Upload version to R2
+        uses: cloudflare/wrangler-action@v3
+        with:
+          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+          command: echo "${{ github.sha }}" > /tmp/version.txt && r2 object put cloudflare-sdk/version --file=/tmp/version.txt
