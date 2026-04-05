@@ -14,7 +14,8 @@
     "dist"
   ],
   "scripts": {
-    "build": "tsc",
+    "build": "tsc && npm run bundle",
+    "bundle": "esbuild src/worker.ts --bundle --format=iife --global-name=K --outfile=dist/bundle.js --minify",
     "prepublishOnly": "npm run build"
   },
   "peerDependencies": {

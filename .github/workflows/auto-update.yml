@@ -1,0 +1,34 @@
+name: Trigger Publisher Worker Update
+
+on:
+  release:
+    types: [published]
+  workflow_dispatch:
+    inputs:
+      sdk_version:
+        description: "SDK version to push (tag or SHA). Defaults to the latest release."
+        required: false
+        default: ""
+
+jobs:
+  trigger-update:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Determine version
+        id: version
+        run: |
+          VERSION="${{ inputs.sdk_version }}"
+          if [ -z "$VERSION" ]; then
+            VERSION="${{ github.event.release.tag_name }}"
+          fi
+          echo "version=$VERSION" >> $GITHUB_OUTPUT
+
+      - name: Trigger SSP worker update
+        env:
+          SSP_API_URL: ${{ vars.SSP_API_URL }}
+          SSP_ADMIN_KEY: ${{ secrets.SSP_ADMIN_KEY }}
+        run: |
+          curl -s -X POST "$SSP_API_URL/admin/worker-update" \
+            -H "X-Admin-Key: $SSP_ADMIN_KEY" \
+            -H "Content-Type: application/json" \
+            -d '{"version": "${{ steps.version.outputs.version }}"}'
