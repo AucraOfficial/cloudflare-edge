@@ -27,17 +27,14 @@ jobs:
       - name: Build bundle
         run: npm run build
 
-      - name: Upload bundle artifact
-        uses: actions/upload-artifact@v4
-        with:
-          name: worker-bundle
-          path: dist/bundle.js
-          retention-days: 30
+      - name: Copy bundle to release asset name
+        run: cp dist/bundle.js worker-bundle
 
-      - name: Create or update release
+      - name: Create release with bundle
         uses: softprops/action-gh-release@v2
         with:
           tag_name: bundle-${{ github.sha }}
+          files: worker-bundle
           generate_release_notes: true
         env:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
