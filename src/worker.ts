@@ -2,6 +2,9 @@ import { compositeDetector, type AgentDetector } from "./agent-detection";
 
 export type { AgentDetector };
 
+// Default export — the SSP expects K to be the handler function.
+export { createAucraHandler as default };
+
 type PageMode = "observe" | "monetise";
 
 interface PageRule {
