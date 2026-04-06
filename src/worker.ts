@@ -158,8 +158,11 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
     SID: ${sid || "(new)"}
   `);
 
+  const auctionUrl = `${__AUCRA_SSP_URL__}/v1/edge/auction`;
+  console.log(`[AUCRA] Calling SSP: ${auctionUrl}`);
+
   try {
-    const res = await fetch(`${__AUCRA_SSP_URL__}/v1/edge/auction`, {
+    const res = await fetch(auctionUrl, {
       method: "POST",
       headers: {
         "Content-Type": "application/json",
@@ -174,6 +177,7 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
       }),
       signal: controller.signal,
     });
+    console.log(`[AUCRA] SSP response status: ${res.status}`);
 
     if (res.status === 204) {
       console.log(`[AUCRA] Auction Result: 204 (No bid)`);
@@ -187,6 +191,9 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
     const data = (await res.json()) as AuctionResult;
     console.log(`[AUCRA] Auction Result: 200 (Winner: ${data.adText})`);
     return data;
+  } catch (err: unknown) {
+    console.log(`[AUCRA] Fetch threw: ${(err as Error).message}`);
+    return null;
   } finally {
     clearTimeout(timer);
   }
