@@ -27,10 +27,9 @@ declare const __AUCRA_SSP_URL__: string;
 interface AuctionResult {
   adText: string;
   citationUrl: string;
-  label: string;
 }
 
-const AD_FETCH_TIMEOUT_MS = 100;
+const AD_FETCH_TIMEOUT_MS = 1000;
 const RULES_CACHE_TTL_MS = 60_000;
 const AD_BLOCK_SELECTOR = /<body[^>]*>/;
 const DEFAULT_MODE: PageMode = "monetise";
@@ -54,7 +53,7 @@ export function createAucraHandler(
     let parsedRules: PageRule[] = [];
     try {
       const res = await fetch(
-        `${__AUCRA_SSP_URL__}/v1/publisher/page-rules?delivery=edge`,
+        `${__AUCRA_SSP_URL__}/v1/edge/page-rules?delivery=edge`,
         { headers: { "X-API-Key": __AUCRA_API_KEY__ } }
       );
       if (res.ok) {
@@ -237,18 +236,9 @@ async function injectAdIntoResponse(
 }
 
 function buildAdBlock(ad: AuctionResult): string {
-  const LABEL_MAP: Record<string, string | null> = {
-    sponsored: "Sponsored:",
-    partner_content: "Partner content:",
-    paid_feature: "Paid feature:",
-    promoted: "Promoted:",
-    none: null,
-  };
-  const prefix = ad.label in LABEL_MAP ? LABEL_MAP[ad.label] : "Sponsored:";
   const text = escapeHtml(ad.adText);
   const url = ad.citationUrl ? ` ${escapeHtml(ad.citationUrl)}` : "";
-  const line = prefix ? `${prefix} ${text}${url}` : `${text}${url}`;
-  return `<p>${line}</p>\n`;
+  return `<p>${text}${url}</p>\n`;
 }
 
 function escapeHtml(str: string): string {
