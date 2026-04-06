@@ -21,6 +21,9 @@ jobs:
       - name: Install dependencies
         run: npm ci
 
+      - name: Install wrangler
+        run: npm install wrangler@3
+
       - name: Build bundle
         run: npm run build
 
@@ -32,8 +35,7 @@ jobs:
           command: r2 object put cloudflare-sdk/${{ github.sha }}/worker-bundle --file=dist/bundle.js
 
       - name: Upload version to R2
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: echo "${{ github.sha }}" > /tmp/version.txt && r2 object put cloudflare-sdk/version --file=/tmp/version.txt
+        run: echo "${{ github.sha }}" > /tmp/version.txt && npx wrangler r2 object put cloudflare-sdk/version --file=/tmp/version.txt
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
