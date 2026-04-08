@@ -96,15 +96,36 @@ export function createAucraHandler(
         `[AUCRA] AI agent detected — UA="${ua}" URL="${request.url}"`
       );
 
-      const originResponse = await fetch(request);
+      // Check Cloudflare CDN cache before hitting origin — cache hits are near-instant.
+      // Cache key must be a Request, and the Request can't have Authorization/Cookie headers
+      // (they're stripped from cache key by Cloudflare automatically).
+      const cacheKey = new Request(request.url, { method: request.method, headers: {} });
+      const cached = await caches.default.match(cacheKey).catch(() => null);
+
+      // Always run the auction in parallel — even cached HTML needs an ad decision,
+      // and if we got a cache hit the origin half of the Promise.all is already done.
+      const [originResponse, ad] = cached
+        ? [cached as Response, await fetchAd(request).catch(() => null)]
+        : await Promise.all([
+            fetch(request).then(async (res) => {
+              // Cache successful HTML responses for future requests.
+              if (res.ok && (res.headers.get("content-type") ?? "").includes("text/html")) {
+                ctx.waitUntil(caches.default.put(cacheKey, res.clone()).catch(() => {}));
+              }
+              return res;
+            }),
+            fetchAd(request).catch((err) => {
+              console.error(`[AUCRA] Edge auction failed: ${err.message}`);
+              return null;
+            }),
+          ]);
+
       const contentType = originResponse.headers.get("content-type") ?? "";
 
-      if (!contentType.includes("text/html")) {
-        console.log(
-          `[AUCRA] Non-HTML response (${contentType}) — skipping ad injection`
-        );
-        return originResponse;
-      }
+      // Don't gate on content-type — some files (e.g. robots.txt on Cloudflare)
+      // have HTML appended after the plain-text directives. The body tag will be
+      // found regardless, and if there's no body the replace is a no-op.
+      void contentType; // future-proof for logging/debugging
 
       const mode = await resolveMode(request, _env);
       console.log(`[AUCRA] Page mode resolved: "${mode}"`);
@@ -115,11 +136,6 @@ export function createAucraHandler(
         return originResponse;
       }
 
-      // Run edge auction with tight timeout (fail open — never delay the page)
-      const ad = await fetchAd(request).catch((err) => {
-        console.error(`[AUCRA] Edge auction failed: ${err.message}`);
-        return null;
-      });
       if (!ad) {
         void ctx?.waitUntil(
           sendEdgeEvent(request, "edge_monetise_nofill").catch(() => undefined)
@@ -168,11 +184,8 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
         "X-API-Key": __AUCRA_API_KEY__,
       },
       body: JSON.stringify({
-        publisherId: __AUCRA_PUBLISHER_ID__,
         pageUrl: request.url,
         userAgent: ua,
-        referer: referer,
-        sessionId: sid,
       }),
       signal: controller.signal,
     });
@@ -191,7 +204,14 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
     console.log(`[AUCRA] Auction Result: 200 (Winner: ${data.adText})`);
     return data;
   } catch (err: unknown) {
-    console.log(`[AUCRA] Fetch threw: ${(err as Error).message}`);
+    const e = err as Error;
+    let cause = "unknown";
+    if (e.name === "AbortError" || e.name === "TimeoutError") {
+      cause = "timeout";
+    } else if ((e as unknown as Record<string, unknown>).code === "ENOTFOUND" || (e as unknown as Record<string, unknown>).code === "ECONNREFUSED") {
+      cause = `network:${(e as unknown as Record<string, unknown>).code}`;
+    }
+    console.log(`[AUCRA] SSP fetch failed: name="${e.name}" message="${e.message}" cause="${cause}"`);
     return null;
   } finally {
     clearTimeout(timer);
