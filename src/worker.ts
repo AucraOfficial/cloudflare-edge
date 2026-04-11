@@ -110,7 +110,7 @@ export function createAucraHandler(
             fetch(request).then(async (res) => {
               // Cache successful HTML responses for future requests.
               if (res.ok && (res.headers.get("content-type") ?? "").includes("text/html")) {
-                ctx.waitUntil(caches.default.put(cacheKey, res.clone()).catch(() => {}));
+                ctx?.waitUntil(caches.default.put(cacheKey, res.clone()).catch(() => {}));
               }
               return res;
             }),
