@@ -29,7 +29,7 @@ interface AuctionResult {
   citationUrl: string;
 }
 
-const AD_FETCH_TIMEOUT_MS = 1000;
+const AD_FETCH_TIMEOUT_MS = 20000;
 const RULES_CACHE_TTL_MS = 60_000;
 const AD_BLOCK_SELECTOR = /<body[^>]*>/;
 const DEFAULT_MODE: PageMode = "monetise";
