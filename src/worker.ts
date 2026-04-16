@@ -177,6 +177,9 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
   console.log(`[AUCRA] Calling SSP: ${auctionUrl}`);
 
   try {
+    const regionCode = (request as any).cf?.regionCode as string | undefined ?? "";
+    const asOrganization = (request as any).cf?.asOrganization as string | undefined ?? "";
+
     const res = await fetch(auctionUrl, {
       method: "POST",
       headers: {
@@ -186,6 +189,8 @@ async function fetchAd(request: Request): Promise<AuctionResult | null> {
       body: JSON.stringify({
         pageUrl: request.url,
         userAgent: ua,
+        regionCode,
+        asOrganization,
       }),
       signal: controller.signal,
     });
@@ -227,6 +232,8 @@ async function sendEdgeEvent(
   request: Request,
   eventType: EdgeEventType
 ): Promise<void> {
+  const regionCode = (request as any).cf?.regionCode as string | undefined ?? "";
+  const asOrganization = (request as any).cf?.asOrganization as string | undefined ?? "";
   await fetch(`${__AUCRA_SSP_URL__}/v1/events`, {
     method: "POST",
     headers: {
@@ -238,6 +245,8 @@ async function sendEdgeEvent(
       publisherId: __AUCRA_PUBLISHER_ID__,
       pageUrl: request.url,
       userAgent: request.headers.get("user-agent") ?? "",
+      regionCode,
+      asOrganization,
     }),
   });
 }
